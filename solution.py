@@ -1,5 +1,8 @@
 import requests
 import pandas as pd
+import sys
+
+stdout = open('answers.txt','wt')
 
 BOOKS_ISBNS_TXT = "/Users/galballas/src/books/books-isbns.txt"
 OPEN_LIBRARY_URL = lambda isbn: f"https://openlibrary.org/isbn/{isbn}.json"
@@ -18,11 +21,11 @@ def get_books_data(books_isbns_path, target_file):
                     book_data: dict = response.json()
                     book_data.update({'isbn': isbn})
                     books_data.append(book_data)
-                    print(f"Finished processing book {i + 1}")
+                    print(f'Finished processing book {i + 1}', file=stdout)
                 else:
                     print('error accessing url', url, response.status_code, response.json())
             except Exception as e:
-                print(f"Exception accessing file {url}", e)
+                print(f'Exception accessing file {url}', e, file=stdout)
 
     df = pd.DataFrame(books_data, index=None)
     df.to_csv(target_file)
@@ -35,12 +38,12 @@ df = pd.read_csv(DOWNLOADED_DATA_CSV)
 
 # How many different books are in the list?
 unique_books = len(df.drop_duplicates(subset=['title']))
-print(f'There are: {unique_books} unique books in the list')
+print(f'There are: {unique_books} unique books in the list', file=stdout)
 
 # What is the book with the most number of different ISBNs?
 book_with_most_isbn = \
     df[['isbn', 'title']].groupby('title').count().reset_index().sort_values(by='isbn', ascending=False).iloc[0]
-print(f'The book with the most number of different ISBNs is: "{book_with_most_isbn}.')
+print(f'The book with the most number of different ISBNs is: "{book_with_most_isbn}.', file=stdout)
 
 # How many books don’t have a goodreads id?
 import json
@@ -52,30 +55,30 @@ books_with_goodreads_id = df_unique['identifiers'].dropna() \
     .apply(lambda c: 1 if 'goodreads' in c else 0) \
     .sum()
 
-print(f'There are {books_with_goodreads_id} books without a goodreads id.')
+print(f'There are {books_with_goodreads_id} books without a goodreads id.', file=stdout)
 
 # How many books have more than one author?
 authors_per_title_df = df[['title', 'authors']].groupby('title').count().reset_index()
 num_of_books_with_multi_authors = len(authors_per_title_df[authors_per_title_df['authors']>1])
 
-print(f'There are {num_of_books_with_multi_authors} books with more than one author.')
+print(f'There are {num_of_books_with_multi_authors} books with more than one author.', file=stdout)
 
 # What is the number of books published per publisher?
 result = df.groupby('publishers').size().reset_index(name='books_published')
 result = result.sort_values(by='books_published', ascending=False)
 
-print(f'The number of books published per publisher: /n  {result}')
+print(f'The number of books published per publisher: /n  {result}.', file=stdout)
 
 # What is the median number of pages for books in this list?
 median_pages = df['number_of_pages'].median()
 
-print(f'The median number of pages per book is: {median_pages}.')
+print(f'The median number of pages per book is: {median_pages}.', file=stdout)
 
 # What is the month with the most number of published books?
 df['publication_date'] = pd.to_datetime(df['publish_date'], format='%B %d, %Y', errors='coerce')
 result = df.groupby(df['publication_date'].dt.strftime('%m')).size().reset_index(name='books_published')
 max_month = result.loc[result['books_published'].idxmax()]
-print(f'The month with the most number of published books is {max_month["publication_date"]}, with {max_month["books_published"]} books published.')
+print(f'The month with the most number of published books is {max_month["publication_date"]}, with {max_month["books_published"]} books published.', file=stdout)
 
 
 # What is/are the longest word/s that appear/s either in a book’s description or in the first sentence of a book? In which book (title) it appears?
@@ -107,9 +110,9 @@ longest_fs_book = max(longest_words.items(), key=lambda x: len(x[1]['first_sente
 longest_fs_word = longest_words[longest_fs_book]['first_sentence']
 
 print(
-    f"The longest word in a book description is '{longest_desc_word}' and it appears in the book '{longest_desc_book}'.")
+    f'The longest word in a book description is "{longest_desc_word}" and it appears in the book "{longest_desc_book}".', file=stdout)
 print(
-    f"The longest word in the first sentence of a book is '{longest_fs_word}' and it appears in the book '{longest_fs_book}'.")
+    f'The longest word in the first sentence of a book is "{longest_fs_word}" and it appears in the book "{longest_fs_book}".', file=stdout)
 
 # What was the last book published in the list?
 df["publish_date"] = pd.to_datetime(df["publish_date"], errors="coerce")
@@ -119,15 +122,18 @@ df["publish_month"] = df["publish_date"].dt.month
 books_df = df.sort_values("publish_date")
 
 last_book = books_df.iloc[-1]["title"]
-print(f"The last book published in the list is '{last_book}'.")
+print(f'The last book published in the list is "{last_book}".', file=stdout)
 
 # What is the year of the most updated entry in the list?
-df_clean = df.dropna(subset=['last_modified'])
-df_clean['year'] = pd.to_datetime(df_clean['last_modified']).dt.year
-max_last_modified = df_clean['last_modified'].max()
+df['last_modified'] = pd.to_datetime(df['last_modified'], errors='coerce', format='%Y-%m-%d %H:%M:%S')
+df['year'] = df['last_modified'].dt.year
+df = df.dropna(subset=['year'])
+df = df.query('year != 0')
+
+max_last_modified = df['last_modified'].max()
 year_of_most_updated_entry = max_last_modified.year
 
-print(f"The year of the most updated entry is {year_of_most_updated_entry}")
+print(f'The year of the most updated entry is {year_of_most_updated_entry}.', file=stdout)
 
 # What is the title of the second published book for the author with the highest number of different titles in the list?
 df.dropna(subset=['title', 'authors'], inplace=True)
@@ -136,13 +142,12 @@ top_author = author_counts.idxmax()
 top_author_books = df[df['authors'] == top_author].sort_values(by='publish_date')
 second_book = top_author_books.iloc[1]['title']
 
-print(f"The title of the second published book for {top_author} is '{second_book}'")
+print(f"The title of the second published book for {top_author} is '{second_book}'", file=stdout)
 
 # What is the pair of (publisher, author) with the highest number of books published?
 publisher_author_counts = df.groupby(['publisher', 'authors'])['title'].count()
 top_pair = publisher_author_counts.idxmax()
 
-print(f"The pair with the highest number of books published is ({top_pair[0]}, {top_pair[1]})")
+print(f"The pair with the highest number of books published is ({top_pair[0]}, {top_pair[1]})", file=stdout)
 
-
-
+stdout.close()
